@@ -4,6 +4,9 @@ import { deriveAll } from "@/core/derive";
 
 export const dynamic = "force-dynamic";
 
+// Gemini regularly takes longer than the 10s a Vercel function gets by default.
+export const maxDuration = 60;
+
 /**
  * Plain text in, structured fields out — one entry per trade described.
  * Writes nothing; saving is a separate step you approve.
