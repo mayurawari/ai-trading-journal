@@ -1,0 +1,18 @@
+node_modules/
+.next/
+out/
+build/
+
+# Google tokens + saved spreadsheet id — never commit these
+.data/
+
+# Secrets
+.env
+.env.local
+
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+
+# Machine-specific Claude Code permissions
+.claude/settings.local.json
