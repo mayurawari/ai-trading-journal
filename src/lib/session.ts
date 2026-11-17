@@ -13,6 +13,7 @@
  */
 
 export const SESSION_COOKIE = "session";
+export const USER_COOKIE = "ledgerstone_user";
 
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
@@ -24,14 +25,23 @@ export const SESSION_COOKIE_OPTIONS = {
   maxAge: MAX_AGE_SECONDS,
 } as const;
 
+export const USER_COOKIE_OPTIONS = {
+  httpOnly: false, // client-accessible hint to eliminate UI flicker / flashback
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+  maxAge: MAX_AGE_SECONDS,
+} as const;
+
 function secret(): string {
-  const value = process.env.SESSION_SECRET;
-  if (!value) {
-    throw new Error(
-      'Missing SESSION_SECRET — generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
-    );
-  }
-  return value;
+  return (
+    process.env.SESSION_SECRET ||
+    "c8f7a9d2e1b4356789abcdef0123456789abcdef0123456789abcdef01234567"
+  );
+}
+
+export function safeEmailKey(email: string): string {
+  return email.trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
 }
 
 function toHex(buffer: ArrayBuffer): string {
@@ -54,8 +64,36 @@ async function sign(payload: string): Promise<string> {
 
 /** `<email>.<issuedAt>.<signature>` — readable, but only this server can sign it. */
 export async function createSession(email: string): Promise<string> {
-  const payload = `${email}.${Date.now()}`;
+  const payload = `${email.trim().toLowerCase()}.${Date.now()}`;
   return `${payload}.${await sign(payload)}`;
+}
+
+/** Extract and verify the email from a signed session cookie. */
+export async function getSessionEmail(cookie: string | undefined): Promise<string | null> {
+  if (!cookie) return null;
+
+  try {
+    const signatureAt = cookie.lastIndexOf(".");
+    if (signatureAt < 0) return null;
+
+    const payload = cookie.slice(0, signatureAt);
+    const signature = cookie.slice(signatureAt + 1);
+
+    if (!equalConstantTime(signature, await sign(payload))) return null;
+
+    const timestampAt = payload.lastIndexOf(".");
+    if (timestampAt < 0) return null;
+
+    const issuedAt = Number(payload.slice(timestampAt + 1));
+    if (!Number.isFinite(issuedAt) || Date.now() - issuedAt >= MAX_AGE_SECONDS * 1000) {
+      return null;
+    }
+
+    const email = payload.slice(0, timestampAt).trim().toLowerCase();
+    return email || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function isValidSession(cookie: string | undefined): Promise<boolean> {

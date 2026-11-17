@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { readJson, writeJson } from "@/lib/store";
+import { safeEmailKey } from "@/lib/session";
 
 /**
  * Derived from `googleapis` rather than imported from `google-auth-library`.
@@ -57,25 +58,46 @@ export function getAuthUrl(): string {
 
 /** Exchange the ?code from Google for tokens, verify identity, and store them. */
 export async function completeSignIn(code: string): Promise<{ email: string }> {
+  console.log("[auth] Step 1: Exchanging code for Google tokens...");
   const client = newClient();
   const { tokens } = await client.getToken(code);
   client.setCredentials(tokens);
 
+  console.log("[auth] Step 2: Fetching user profile from Google...");
   const { data } = await google.oauth2({ version: "v2", auth: client }).userinfo.get();
-  const email = data.email;
+  const email = data.email?.trim().toLowerCase();
   if (!email) throw new Error("Google did not return an email address.");
 
-  // Single-user app: only the allow-listed account may connect (ARCHITECTURE.md §7).
-  const allowed = process.env.ALLOWED_GOOGLE_EMAIL?.trim().toLowerCase();
-  if (allowed && email.toLowerCase() !== allowed) {
-    throw new Error(`${email} is not the allowed account. Expected ${allowed}.`);
+  console.log("[auth] Step 3: Saving credentials for:", email);
+  const userTokenKey = `tokens_${safeEmailKey(email)}`;
+  const storedData: StoredTokens = { ...tokens, email };
+  await writeJson(userTokenKey, storedData);
+  await writeJson("tokens", storedData);
+
+  // Register email for cron alert broadcasts
+  const registered = (await readJson<string[]>("registered_traders")) || [];
+  if (!registered.includes(email)) {
+    await writeJson("registered_traders", [...registered, email]);
   }
 
-  await writeJson("tokens", { ...tokens, email } satisfies StoredTokens);
+  console.log("[auth] Step 4: Sign-in complete for:", email);
   return { email };
 }
 
-export async function getConnectedEmail(): Promise<string | null> {
+export async function getRegisteredTraders(): Promise<string[]> {
+  const list = (await readJson<string[]>("registered_traders")) || [];
+  const defaultTokens = await readJson<StoredTokens>("tokens");
+  if (defaultTokens?.email && !list.includes(defaultTokens.email)) {
+    list.push(defaultTokens.email);
+  }
+  return list;
+}
+
+export async function getConnectedEmail(userEmail?: string): Promise<string | null> {
+  if (userEmail) {
+    const userTokens = await readJson<StoredTokens>(`tokens_${safeEmailKey(userEmail)}`);
+    if (userTokens?.email) return userTokens.email;
+  }
   const tokens = await readJson<StoredTokens>("tokens");
   return tokens?.email ?? null;
 }
@@ -83,10 +105,17 @@ export async function getConnectedEmail(): Promise<string | null> {
 /**
  * An OAuth client with stored credentials loaded, ready to call Google.
  * Refreshed tokens are written back so the connection keeps working
- * without re-authorising.
+ * without re-authorising. Scoped per user account.
  */
-export async function getAuthedClient(): Promise<GoogleOAuthClient> {
-  const stored = await readJson<StoredTokens>("tokens");
+export async function getAuthedClient(userEmail?: string): Promise<GoogleOAuthClient> {
+  const userKey = userEmail ? `tokens_${safeEmailKey(userEmail)}` : "tokens";
+  let stored = await readJson<StoredTokens>(userKey);
+
+  if (!stored?.refresh_token && !stored?.access_token && userEmail) {
+    // Fall back to default tokens if user-specific key not yet set
+    stored = await readJson<StoredTokens>("tokens");
+  }
+
   if (!stored?.refresh_token && !stored?.access_token) {
     throw new Error("NOT_CONNECTED");
   }
@@ -98,12 +127,19 @@ export async function getAuthedClient(): Promise<GoogleOAuthClient> {
     // Google omits refresh_token on refresh responses — keep the original.
     const merged = { ...stored, ...fresh };
     if (!merged.refresh_token) merged.refresh_token = stored.refresh_token;
+
+    if (userEmail) {
+      await writeJson(`tokens_${safeEmailKey(userEmail)}`, merged);
+    }
     await writeJson("tokens", merged);
   });
 
   return client;
 }
 
-export async function disconnect(): Promise<void> {
+export async function disconnect(userEmail?: string): Promise<void> {
+  if (userEmail) {
+    await writeJson(`tokens_${safeEmailKey(userEmail)}`, {});
+  }
   await writeJson("tokens", {});
 }

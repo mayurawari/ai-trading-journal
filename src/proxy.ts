@@ -15,11 +15,21 @@ export const config = {
 };
 
 /**
- * Sign-in obviously cannot require a session. `/api/status` stays open too, but
- * answers `connected: false` without one, so the page can still render its
- * "Connect Google" button to a visitor who has not signed in yet.
+ * Publicly open paths:
+ * - Authentication & status routes
+ * - News alerts and cron tasks
+ * - Conversational AI (/api/chat) and save (/api/save), which support unauthenticated Demo Sandbox
+ *   mode natively while strictly gating live Google Sheet writes behind OAuth session tokens.
  */
-const OPEN_PATHS = ["/api/auth/google", "/api/status"];
+const OPEN_PATHS = [
+  "/api/auth/google",
+  "/api/auth/logout",
+  "/api/status",
+  "/api/cron",
+  "/api/news",
+  "/api/chat",
+  "/api/save",
+];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -78,14 +78,12 @@ export const FIELDS = [
     desc: "Stop loss price. Null if none was set." },
   { key: "target", header: "Target", type: "number", source: "ai", group: "Prices",
     desc: "Take profit price. Null if no target was set." },
-  { key: "riskReward", header: "Risk Reward", type: "number", source: "derived", group: "Auto",
-    desc: "Reward divided by risk, from entry/stop/target." },
+  { key: "riskReward", header: "Risk Reward", type: "number", source: "ai", group: "Prices",
+    desc: "Risk reward ratio if stated (e.g. 1:2 -> 2, 2R -> 2) or derived from entry/stop/target/exit." },
 
   // ── Size ───────────────────────────────────────────────────────────
   { key: "lotSize", header: "Lot Size", type: "number", source: "ai", group: "Size",
     desc: "Lots, contracts, quantity or units as stated." },
-  { key: "positionSize", header: "Position Size", type: "number", source: "ai", group: "Size",
-    desc: "Notional value if explicitly stated. Null otherwise — never estimate it." },
 
   // ── Context ────────────────────────────────────────────────────────
   { key: "session", header: "Session", type: "enum", source: "ai", group: "Context",
@@ -98,7 +96,7 @@ export const FIELDS = [
   { key: "strategy", header: "Strategy Used", type: "text", source: "ai", group: "Context",
     desc: "Broader strategy or system, if named separately from the setup." },
   { key: "reasonForEntry", header: "Reason for Entry", type: "text", source: "ai", group: "Context",
-    desc: "Why they entered, in their own words, condensed to one line.", long: true },
+    desc: "Why they entered / confirmation trigger, in their own words.", long: true },
   { key: "reasonForExit", header: "Reason for Exit", type: "text", source: "ai", group: "Context",
     desc: "Why they exited, e.g. hit target, stopped out, closed manually.", long: true },
 
@@ -109,27 +107,23 @@ export const FIELDS = [
     desc: "Emotion while in the trade, only if mentioned." },
   { key: "emotionAfter", header: "Emotion After Trade", type: "text", source: "ai", group: "Psychology",
     desc: "Emotion after closing, only if mentioned." },
-  { key: "confidence", header: "Confidence Rating", type: "number", source: "ai", group: "Psychology",
-    desc: "Confidence 1-10, only if a number is stated or clearly implied." },
+  { key: "ruleAdherence", header: "Rule Adherence", type: "enum", source: "ai", group: "Psychology",
+    values: ["FOLLOWED (100%)", "PARTIAL", "BROKE RULES"],
+    desc: "Whether strategy rules were followed: FOLLOWED (100%), PARTIAL, or BROKE RULES." },
+  { key: "executionMistakes", header: "Execution Mistakes", type: "enum", source: "ai", group: "Psychology",
+    values: ["NONE", "FOMO", "REVENGE", "EARLY ENTRY", "CHASED PRICE", "MOVED SL/TP", "OVERTRADING", "OTHER"],
+    desc: "Execution mistakes: NONE, FOMO, REVENGE, EARLY ENTRY, CHASED PRICE, MOVED SL/TP, OVERTRADING, or OTHER." },
   { key: "ruleBroken", header: "Rule Broken", type: "text", source: "ai", group: "Psychology",
     desc: "Any personal trading rule they say they broke. Their words, not your judgement." },
 
   // ── Outcome ────────────────────────────────────────────────────────
   { key: "result", header: "Result", type: "enum", source: "derived", group: "Auto",
-    values: ["WIN", "LOSS", "BE"],
+    values: ["WIN", "LOSS", "BE", "MANUAL_CLOSE"],
     desc: "From stated PnL, or from entry vs exit vs direction." },
   { key: "pnl", header: "PnL", type: "number", source: "ai", group: "Outcome",
     desc: "Profit or loss in money, only if stated. Negative for a loss. Never calculate it." },
-  { key: "pnlPercent", header: "PnL %", type: "number", source: "ai", group: "Outcome",
-    desc: "Percent gain/loss on the account, only if stated." },
-  { key: "holdingTime", header: "Holding Time", type: "text", source: "ai", group: "Outcome",
-    desc: "How long the trade was held, only if stated, e.g. '45m', '2h 10m'." },
 
-  // ── Attachments & notes ────────────────────────────────────────────
-  { key: "tradingViewLink", header: "TradingView Link", type: "text", source: "ai", group: "Notes",
-    desc: "TradingView URL if one appears in the text." },
-  { key: "lessonsLearned", header: "Lessons Learned", type: "text", source: "ai", group: "Notes",
-    desc: "What they say they learned or would do differently.", long: true },
+  // ── Notes ──────────────────────────────────────────────────────────
   { key: "notes", header: "Additional Notes", type: "text", source: "ai", group: "Notes",
     desc: "Anything meaningful that fits no other column. Do not repeat other fields here.", long: true },
 

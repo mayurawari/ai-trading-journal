@@ -1,53 +1,113 @@
 @import "tailwindcss";
 
-@theme {
-  --color-surface: #ffffff;
-  --color-surface-2: #fafaf9;
-  --color-line: #e7e5e4;
-  --color-ink: #1c1917;
-  --color-ink-2: #78716c;
-  --color-accent: #0f766e;
-}
+/*
+  LEDGERSTONE 5-COLOR SYSTEM
+  1. #f1f0ea (Light Surface): Primary canvas background, card interiors, and light surfaces.
+  2. #e0ddcf (Border & Divider): Card outlines, panel dividers, subtle chips, and hover states.
+  3. #534b52 (Secondary Text): Subheadings, metadata labels, timestamps, and muted details.
+  4. #474448 (Primary Interactive): Action buttons, user message bubbles, and strong borders.
+  5. #2d232e (Dark Contrast): Headings, brand title, high-contrast text, and dark badges.
 
-@media (prefers-color-scheme: dark) {
-  @theme {
-    --color-surface: #0c0a09;
-    --color-surface-2: #1c1917;
-    --color-line: #292524;
-    --color-ink: #fafaf9;
-    --color-ink-2: #a8a29e;
-    --color-accent: #2dd4bf;
-  }
-}
+  STRICT 2-FONT SYSTEM
+  1. Poppins: Headings, button labels, and prominent numbers.
+  2. Roboto: Body copy, trade descriptions, and conversational messages.
+*/
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  --color-canvas: #f1f0ea;
+  --color-border: #e0ddcf;
+  --color-muted: #534b52;
+  --color-primary: #474448;
+  --color-dark: #2d232e;
+}
+
+*,
+*::before,
+*::after {
+  font-style: normal !important;
 }
 
 body {
-  background: var(--color-surface);
-  color: var(--color-ink);
+  background-color: #f1f0ea;
+  color: #2d232e;
+  font-family: "Roboto", sans-serif;
+  font-style: normal !important;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Inputs share one look, defined once rather than repeated on every field. */
-.field {
-  width: 100%;
-  border-radius: 0.5rem;
-  border: 1px solid var(--color-line);
-  background: var(--color-surface);
-  padding: 0.5rem 0.65rem;
-  font-size: 0.875rem;
-  color: var(--color-ink);
-  outline: none;
-  transition: border-color 0.15s;
+.font-heading {
+  font-family: "Poppins", sans-serif;
 }
 
-.field:focus {
-  border-color: var(--color-accent);
+.font-body {
+  font-family: "Roboto", sans-serif;
 }
 
-.field::placeholder {
-  color: var(--color-ink-2);
-  opacity: 0.6;
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #e0ddcf;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #534b52;
+}
+
+/* Subtle, institutional live logo light animations using #f1f0ea and #e0ddcf */
+@keyframes live-sheen {
+  0% {
+    transform: translateX(-120%) rotate(25deg);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.35;
+  }
+  60% {
+    transform: translateX(120%) rotate(25deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(120%) rotate(25deg);
+    opacity: 0;
+  }
+}
+
+.animate-live-sheen {
+  animation: live-sheen 4s ease-in-out infinite;
+}
+
+@keyframes terminal-halo {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(224, 221, 207, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(224, 221, 207, 0);
+  }
+}
+
+.animate-terminal-halo {
+  animation: terminal-halo 2.5s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(30%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-progress-slide {
+  animation: progress-slide 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
