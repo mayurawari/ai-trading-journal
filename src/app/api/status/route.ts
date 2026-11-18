@@ -16,7 +16,9 @@ import {
   USER_COOKIE,
   USER_COOKIE_OPTIONS,
   getSessionEmail,
+  safeEmailKey,
 } from "@/lib/session";
+import { readJson, redis } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,55 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const session = (await cookies()).get(SESSION_COOKIE)?.value;
   const email = await getSessionEmail(session);
+
+  if (request.nextUrl.searchParams.get("diag") === "1") {
+    let redisPing: string | null = null;
+    let redisError: string | null = null;
+    let tokenKeys: string[] = [];
+    if (redis) {
+      try {
+        redisPing = await redis.ping();
+        tokenKeys = await redis.keys("tokens*");
+      } catch (err) {
+        redisError = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    let userTokensFound = false;
+    let rootTokensFound = false;
+    try {
+      const userTokens = email
+        ? await readJson<{ refresh_token?: string; access_token?: string }>(`tokens_${safeEmailKey(email)}`)
+        : null;
+      userTokensFound = Boolean(userTokens?.refresh_token || userTokens?.access_token);
+      const rootTokens = await readJson<{ refresh_token?: string; access_token?: string }>("tokens");
+      rootTokensFound = Boolean(rootTokens?.refresh_token || rootTokens?.access_token);
+    } catch {}
+
+    return NextResponse.json({
+      diag: true,
+      env: {
+        hasRedisUrl: Boolean(process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL),
+        hasRedisToken: Boolean(process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN),
+        hasGoogleClientId: Boolean(process.env.GOOGLE_CLIENT_ID),
+        hasGoogleSecret: Boolean(process.env.GOOGLE_CLIENT_SECRET),
+        hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+        hasSessionSecret: Boolean(process.env.SESSION_SECRET),
+      },
+      redis: {
+        initialized: Boolean(redis),
+        ping: redisPing,
+        error: redisError,
+        tokenKeys,
+      },
+      auth: {
+        hasSessionCookie: Boolean(session),
+        sessionEmail: email || null,
+        userTokensFound,
+        rootTokensFound,
+      },
+    });
+  }
 
   if (!email) {
     const response = NextResponse.json({

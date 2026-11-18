@@ -393,7 +393,22 @@ export default function JournalClient({ initialStatus }: { initialStatus?: Conne
       return;
     }
 
-    if (textContent === "Save trades now" || textContent === "Retry save" || textContent === "Save to Sheet" || textContent === "Save to Demo Sheet") {
+    if (textContent === "Connect with Google" || textContent === "Connect Google Account") {
+      window.location.href = "/api/auth/google";
+      return;
+    }
+
+    if (textContent === "Save to Demo Sandbox" || textContent === "Save to Demo Sheet") {
+      setActiveJournalMode("test");
+      setIsDemoModeEnabled(true);
+      try {
+        localStorage.setItem("ledgerstone_demo_active", "true");
+      } catch {}
+      void handleSavePositionsToSpreadsheet();
+      return;
+    }
+
+    if (textContent === "Save trades now" || textContent === "Retry save" || textContent === "Save to Sheet") {
       if (workflowStage === "saved") {
         setConversationMessages((previous) => [
           ...previous,
@@ -554,14 +569,21 @@ export default function JournalClient({ initialStatus }: { initialStatus?: Conne
       if (!responseData.ok) {
         const failureDetails = responseData.error || "Failed to process trading dialogue.";
         setErrorMessage(failureDetails);
+        const isAuthNotice = response.status === 401 || failureDetails.toLowerCase().includes("not connected");
         setConversationMessages((previous) => [
           ...previous,
           {
             role: "assistant",
-            content: `Notice: ${failureDetails}\n\nYour trade details are saved in this session. Tap Save trades now or Retry below.`,
+            content: isAuthNotice
+              ? `Notice: ${failureDetails}\n\nYour trade details are saved in this session. Tap Connect with Google to authorize sync, or Save to Demo Sandbox.`
+              : `Notice: ${failureDetails}\n\nYour trade details are saved in this session. Tap Save trades now or Retry below.`,
           },
         ]);
-        setSuggestedOptionReplies(["Save trades now", "Retry"]);
+        setSuggestedOptionReplies(
+          isAuthNotice
+            ? ["Connect with Google", "Save to Demo Sandbox", "Retry"]
+            : ["Save trades now", "Retry"]
+        );
         setIsProcessingRequest(false);
         return;
       }
@@ -618,14 +640,21 @@ export default function JournalClient({ initialStatus }: { initialStatus?: Conne
       if (!responseData.ok) {
         const failureDetails = responseData.error || "Save operation failed.";
         setErrorMessage(failureDetails);
+        const isAuthNotice = response.status === 401 || failureDetails.toLowerCase().includes("not connected");
         setConversationMessages((previous) => [
           ...previous,
           {
             role: "assistant",
-            content: `Save notice: ${failureDetails}\n\nTap Retry save to try recording to Google Sheets again.`,
+            content: isAuthNotice
+              ? `Google Sheets notice: ${failureDetails}\n\nYour trades are intact. Tap Connect with Google to authorize your sheet, or tap Save to Demo Sandbox to record them locally right now.`
+              : `Save notice: ${failureDetails}\n\nTap Retry save to try recording to Google Sheets again.`,
           },
         ]);
-        setSuggestedOptionReplies(["Retry save", "Open Sheet"]);
+        setSuggestedOptionReplies(
+          isAuthNotice
+            ? ["Connect with Google", "Save to Demo Sandbox", "Download CSV"]
+            : ["Retry save", "Open Sheet"]
+        );
         return;
       }
 
