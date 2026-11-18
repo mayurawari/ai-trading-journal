@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { completeSignIn } from "@/services/google/auth";
+import { completeSignIn, resolveRedirectUri } from "@/services/google/auth";
 import {
   SESSION_COOKIE,
   SESSION_COOKIE_OPTIONS,
@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { email } = await completeSignIn(code);
+    const redirectUri = resolveRedirectUri(request);
+    const { email } = await completeSignIn(code, redirectUri);
     target.searchParams.set("connected", "1");
 
     const response = NextResponse.redirect(target);

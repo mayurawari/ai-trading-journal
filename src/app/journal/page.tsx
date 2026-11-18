@@ -32,10 +32,10 @@ export default async function JournalPage() {
       environment: activeEnv,
       sheet: activeSpreadsheetId
         ? {
-            url: sheetUrl(activeSpreadsheetId),
-            trades: null,
-            environment: activeEnv,
-          }
+          url: sheetUrl(activeSpreadsheetId),
+          trades: null,
+          environment: activeEnv,
+        }
         : null,
       realSheet: {
         id: realId,

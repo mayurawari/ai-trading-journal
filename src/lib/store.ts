@@ -15,9 +15,14 @@ import { Redis } from "@upstash/redis";
  */
 const DATA_DIR = path.join(process.cwd(), ".data");
 
+function cleanEnv(val?: string): string | undefined {
+  if (!val) return undefined;
+  return val.trim().replace(/^["']|["']$/g, "").trim();
+}
+
 function initRedis(): Redis | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+  const url = cleanEnv(process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL);
+  const token = cleanEnv(process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN);
 
   if (url && token) {
     try {
