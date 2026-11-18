@@ -18,7 +18,7 @@ import {
   getSessionEmail,
   safeEmailKey,
 } from "@/lib/session";
-import { readJson, redis } from "@/lib/store";
+import { readJson, redis, parseUpstashConfig } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +28,10 @@ export async function GET(request: NextRequest) {
   const email = await getSessionEmail(session);
 
   if (request.nextUrl.searchParams.get("diag") === "1") {
+    const upstashConfig = parseUpstashConfig();
     let redisPing: string | null = null;
     let redisError: string | null = null;
+    let redisErrorCause: string | null = null;
     let tokenKeys: string[] = [];
     if (redis) {
       try {
@@ -37,6 +39,10 @@ export async function GET(request: NextRequest) {
         tokenKeys = await redis.keys("tokens*");
       } catch (err) {
         redisError = err instanceof Error ? err.message : String(err);
+        if (err && typeof err === "object" && "cause" in err) {
+          const c = (err as { cause?: unknown }).cause;
+          redisErrorCause = c instanceof Error ? c.message : String(c);
+        }
       }
     }
 
@@ -50,6 +56,16 @@ export async function GET(request: NextRequest) {
       const rootTokens = await readJson<{ refresh_token?: string; access_token?: string }>("tokens");
       rootTokensFound = Boolean(rootTokens?.refresh_token || rootTokens?.access_token);
     } catch {}
+
+    let host: string | null = null;
+    let scheme: string | null = null;
+    if (upstashConfig?.url) {
+      try {
+        const u = new URL(upstashConfig.url);
+        host = u.host;
+        scheme = u.protocol;
+      } catch {}
+    }
 
     return NextResponse.json({
       diag: true,
@@ -65,6 +81,10 @@ export async function GET(request: NextRequest) {
         initialized: Boolean(redis),
         ping: redisPing,
         error: redisError,
+        errorCause: redisErrorCause,
+        scheme,
+        host,
+        tokenLength: upstashConfig?.token ? upstashConfig.token.length : 0,
         tokenKeys,
       },
       auth: {

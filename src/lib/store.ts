@@ -20,13 +20,44 @@ function cleanEnv(val?: string): string | undefined {
   return val.trim().replace(/^["']|["']$/g, "").trim();
 }
 
-function initRedis(): Redis | null {
-  const url = cleanEnv(process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL);
-  const token = cleanEnv(process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN);
+export function parseUpstashConfig(): { url: string; token: string } | null {
+  const rawUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+  const rawToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+
+  if (!rawUrl) return null;
+
+  let url = cleanEnv(rawUrl) || "";
+  let token = cleanEnv(rawToken) || "";
+
+  // If user pasted a rediss:// or redis:// URI (e.g. from Upstash general connection string)
+  if (url.startsWith("rediss://") || url.startsWith("redis://")) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.password && !token) {
+        token = decodeURIComponent(parsed.password);
+      }
+      url = `https://${parsed.hostname}`;
+    } catch {
+      // Keep original url if parsing fails
+    }
+  } else if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    url = `https://${url}`;
+  }
+
+  // Remove any trailing slashes
+  url = url.replace(/\/+$/, "");
 
   if (url && token) {
+    return { url, token };
+  }
+  return null;
+}
+
+function initRedis(): Redis | null {
+  const config = parseUpstashConfig();
+  if (config) {
     try {
-      return new Redis({ url, token });
+      return new Redis({ url: config.url, token: config.token });
     } catch (err) {
       console.warn("[store] Failed to initialize Upstash Redis:", err);
     }
