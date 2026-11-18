@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
       try {
         saveResult = await appendTrades(complete, userEmail, targetEnv);
       } catch (appendErr) {
+        console.error("[save] Failed appendTrades in targetEnv:", targetEnv, appendErr);
         if (targetEnv === "test") {
           return NextResponse.json({
             ok: true,

@@ -106,7 +106,11 @@ export async function POST(request: NextRequest) {
       try {
         saveResult = await appendTrades(completeTrades, userEmail, targetEnv);
       } catch (saveErr) {
+        console.error("[chat] Failed to append trades in targetEnv:", targetEnv, saveErr);
         if (targetEnv === "test") {
+          const reasonText = !userEmail
+            ? "Saved to local sandbox (Google account not connected)."
+            : `Saved to local sandbox (Google Sheet notice: ${saveErr instanceof Error ? saveErr.message : "could not write to sheet"}).`;
           return NextResponse.json({
             ok: true,
             stage: "saved",
@@ -121,7 +125,7 @@ export async function POST(request: NextRequest) {
               `**Successfully saved to Demo Sandbox!**\n\n` +
               `- **${completeTrades.length} trade${completeTrades.length === 1 ? "" : "s"}** calculated and added to your local Demo Sheet.\n` +
               `${hasDaily ? "- **Daily Reflection** recorded.\n" : ""}\n` +
-              `*Saved to local sandbox (Google account not connected).*`,
+              `*${reasonText}*`,
             suggestedReplies: ["Journal more trades", "View Demo Sheet", "Download CSV"],
           });
         }
@@ -425,7 +429,11 @@ export async function POST(request: NextRequest) {
         try {
           saveResult = await appendTrades(completeTrades, userEmail, targetEnv);
         } catch (appendErr) {
+          console.error("[chat] Failed auto-append in targetEnv:", targetEnv, appendErr);
           if (targetEnv === "test") {
+            const reasonText = !userEmail
+              ? "Saved to local sandbox (Google account not connected)."
+              : `Saved to local sandbox (Google Sheet notice: ${appendErr instanceof Error ? appendErr.message : "could not write to sheet"}).`;
             return NextResponse.json({
               ok: true,
               stage: "saved",
@@ -440,7 +448,7 @@ export async function POST(request: NextRequest) {
                 `${turn.assistantMessage}\n\n` +
                 `**Saved to Demo Sandbox!**\n` +
                 `- **${completeTrades.length} trade${completeTrades.length === 1 ? "" : "s"}** calculated and recorded locally.\n\n` +
-                `*Saved to local sandbox (Google account not connected).*`,
+                `*${reasonText}*`,
               suggestedReplies: ["Journal more trades", "View Demo Sheet", "Download CSV"],
             });
           }

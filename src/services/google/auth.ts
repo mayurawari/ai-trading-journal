@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import type { NextRequest } from "next/server";
 import { readJson, writeJson } from "@/lib/store";
 import { safeEmailKey } from "@/lib/session";
 
@@ -33,23 +34,67 @@ interface StoredTokens {
   email?: string;
 }
 
+function cleanEnv(val?: string): string | undefined {
+  if (!val) return undefined;
+  return val.trim().replace(/^["']|["']$/g, "").trim();
+}
+
 function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing ${name} in .env.local — see BUILD_LOG.md step 1.`);
+  const value = cleanEnv(process.env[name]);
+  if (!value) throw new Error(`Missing ${name} in environment variables.`);
   return value;
 }
 
-function newClient(): GoogleOAuthClient {
+export function resolveRedirectUri(request?: NextRequest): string {
+  const envUri = cleanEnv(process.env.GOOGLE_REDIRECT_URI);
+  // If explicitly configured in production with HTTPS, prioritize it
+  if (envUri && envUri.startsWith("https://")) {
+    return envUri;
+  }
+
+  // Auto-detect from incoming request headers
+  if (request) {
+    const host =
+      request.headers.get("x-forwarded-host") ||
+      request.headers.get("host");
+
+    if (host) {
+      const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
+      // Per Google's OAuth Secure Response Handling policy, non-localhost MUST use https
+      const proto = isLocal
+        ? (request.headers.get("x-forwarded-proto") || "http")
+        : "https";
+
+      return `${proto}://${host}/api/auth/google/callback`;
+    }
+
+    const origin = request.nextUrl.origin;
+    if (origin) {
+      const secureOrigin = origin.includes("localhost")
+        ? origin
+        : origin.replace(/^http:\/\//i, "https://");
+      return `${secureOrigin}/api/auth/google/callback`;
+    }
+  }
+
+  return envUri || "http://localhost:3000/api/auth/google/callback";
+}
+
+export function newClient(customRedirectUri?: string): GoogleOAuthClient {
+  const redirectUri =
+    customRedirectUri ||
+    process.env.GOOGLE_REDIRECT_URI ||
+    "http://localhost:3000/api/auth/google/callback";
+
   return new google.auth.OAuth2(
     requireEnv("GOOGLE_CLIENT_ID"),
     requireEnv("GOOGLE_CLIENT_SECRET"),
-    process.env.GOOGLE_REDIRECT_URI ??
-      "http://localhost:3000/api/auth/google/callback",
+    redirectUri,
   );
 }
 
-export function getAuthUrl(): string {
-  return newClient().generateAuthUrl({
+export function getAuthUrl(customRedirectUri?: string): string {
+  return newClient(customRedirectUri).generateAuthUrl({
     access_type: "offline", // we need a refresh token so this survives restarts
     prompt: "consent", // force a refresh token even on repeat authorisations
     scope: SCOPES,
@@ -57,9 +102,9 @@ export function getAuthUrl(): string {
 }
 
 /** Exchange the ?code from Google for tokens, verify identity, and store them. */
-export async function completeSignIn(code: string): Promise<{ email: string }> {
+export async function completeSignIn(code: string, customRedirectUri?: string): Promise<{ email: string }> {
   console.log("[auth] Step 1: Exchanging code for Google tokens...");
-  const client = newClient();
+  const client = newClient(customRedirectUri);
   const { tokens } = await client.getToken(code);
   client.setCredentials(tokens);
 
@@ -108,12 +153,27 @@ export async function getConnectedEmail(userEmail?: string): Promise<string | nu
  * without re-authorising. Scoped per user account.
  */
 export async function getAuthedClient(userEmail?: string): Promise<GoogleOAuthClient> {
-  const userKey = userEmail ? `tokens_${safeEmailKey(userEmail)}` : "tokens";
+  const normalizedEmail = userEmail?.trim().toLowerCase();
+  const userKey = normalizedEmail ? `tokens_${safeEmailKey(normalizedEmail)}` : "tokens";
   let stored = await readJson<StoredTokens>(userKey);
 
-  if (!stored?.refresh_token && !stored?.access_token && userEmail) {
-    // Fall back to default tokens if user-specific key not yet set
+  if (!stored?.refresh_token && !stored?.access_token) {
+    // Fall back to default tokens if user-specific key not yet set or email omitted
     stored = await readJson<StoredTokens>("tokens");
+  }
+
+  // Fall back to any registered trader tokens if still empty
+  if (!stored?.refresh_token && !stored?.access_token) {
+    try {
+      const registered = await getRegisteredTraders();
+      for (const trader of registered) {
+        const traderStored = await readJson<StoredTokens>(`tokens_${safeEmailKey(trader)}`);
+        if (traderStored?.refresh_token || traderStored?.access_token) {
+          stored = traderStored;
+          break;
+        }
+      }
+    } catch {}
   }
 
   if (!stored?.refresh_token && !stored?.access_token) {

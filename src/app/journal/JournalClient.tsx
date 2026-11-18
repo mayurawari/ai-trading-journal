@@ -143,8 +143,10 @@ export default function JournalClient({ initialStatus }: { initialStatus?: Conne
       setConnectionStatus(statusPayload);
       if (typeof window !== "undefined") {
         if (statusPayload.connected && statusPayload.email) {
+          setIsDemoModeEnabled(false);
           try {
             localStorage.setItem("ledgerstone_user_hint", statusPayload.email);
+            localStorage.removeItem("ledgerstone_demo_active");
           } catch {}
         } else if (!statusPayload.connected) {
           try {
@@ -248,12 +250,29 @@ export default function JournalClient({ initialStatus }: { initialStatus?: Conne
   useEffect(() => {
     if (typeof window !== "undefined") {
       const searchParams = new URLSearchParams(window.location.search);
+      const justConnected = searchParams.get("connected") === "1";
       const isDemoParam = searchParams.get("mode") === "demo" || searchParams.get("demo") === "true";
+
+      if (justConnected) {
+        try {
+          localStorage.removeItem("ledgerstone_demo_active");
+        } catch {}
+      }
+
       const isDemoSaved = localStorage.getItem("ledgerstone_demo_active") === "true";
-      if (isDemoParam || isDemoSaved) {
+      const isConnected = Boolean(initialStatus?.connected);
+
+      // Only enter demo sandbox if explicitly requested via query param OR if saved and NOT logged in
+      if (isDemoParam || (isDemoSaved && !isConnected)) {
         setIsDemoModeEnabled(true);
         setActiveJournalMode("test");
         setJournalSpreadsheetUrl("#demo-sheet");
+      } else if (isConnected && !isDemoParam) {
+        setIsDemoModeEnabled(false);
+        setActiveJournalMode(initialStatus?.environment || "real");
+        if (initialStatus?.sheet?.url) {
+          setJournalSpreadsheetUrl(initialStatus.sheet.url);
+        }
       }
       try {
         const rawTrades = localStorage.getItem("ledgerstone_demo_trades");
@@ -318,6 +337,18 @@ export default function JournalClient({ initialStatus }: { initialStatus?: Conne
   }, [activeTrades, dailyReflectionAnswers, conversationMessages, suggestedOptionReplies, workflowStage]);
 
   useEffect(() => {
+    const urlSearchParameters = new URLSearchParams(window.location.search);
+    const authenticationError = urlSearchParameters.get("error");
+    const justConnected = urlSearchParameters.get("connected") === "1";
+
+    if (justConnected) {
+      try {
+        localStorage.removeItem("ledgerstone_demo_active");
+      } catch {}
+      setIsDemoModeEnabled(false);
+      setActiveJournalMode("real");
+    }
+
     if (!initialStatus?.connected) {
       const hint = readClientAuthHint();
       if (hint) {
@@ -325,12 +356,10 @@ export default function JournalClient({ initialStatus }: { initialStatus?: Conne
         setIsInitializing(false);
       }
     }
-    const urlSearchParameters = new URLSearchParams(window.location.search);
-    const authenticationError = urlSearchParameters.get("error");
     if (authenticationError) {
       setErrorMessage(authenticationError);
     }
-    if (authenticationError || urlSearchParameters.get("connected")) {
+    if (authenticationError || justConnected) {
       window.history.replaceState({}, "", window.location.pathname);
     }
     void fetchConnectionStatus();
